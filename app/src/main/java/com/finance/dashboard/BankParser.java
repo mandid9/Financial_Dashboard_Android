@@ -35,14 +35,20 @@ public class BankParser {
         }
     }
 
+    public static String normalize(String s) {
+        if (s == null) return "";
+        return s.toLowerCase().replaceAll("[\\s\\-_.,/\\\\#&@]", "");
+    }
+
     public static ParsedTransaction parse(Context context, String body) {
         if (body == null || body.trim().isEmpty()) {
             return new ParsedTransaction(false, 0, "", "outgoing", "", "");
         }
 
         String msg = body.trim();
+        String normMsg = normalize(msg);
 
-        // 1. Check Dynamic Custom Rules Cached in SharedPreferences (Hybrid Approach)
+        // 1. Check Dynamic Custom Rules Cached in SharedPreferences (Fuzzy & Case-Insensitive)
         if (context != null) {
             SharedPreferences prefs = context.getSharedPreferences("finance_prefs", Context.MODE_PRIVATE);
             String customRulesJson = prefs.getString("custom_sms_rules", "");
@@ -52,13 +58,16 @@ public class BankParser {
                     for (int i = 0; i < rules.length(); i++) {
                         JSONObject rule = rules.getJSONObject(i);
                         String keyword = rule.optString("keyword", "");
-                        if (!keyword.isEmpty() && msg.toLowerCase().contains(keyword.toLowerCase())) {
-                            double amt = extractGenericAmount(msg);
-                            if (amt > 0) {
-                                String name = rule.optString("name", keyword);
-                                String kind = rule.optString("kind", "outgoing");
-                                String category = rule.optString("category", "");
-                                return new ParsedTransaction(true, amt, name, kind, "Custom Rule: " + name, msg, category);
+                        if (!keyword.isEmpty()) {
+                            String normKeyword = normalize(keyword);
+                            if (normMsg.contains(normKeyword) || msg.toLowerCase().contains(keyword.toLowerCase())) {
+                                double amt = extractGenericAmount(msg);
+                                if (amt > 0) {
+                                    String name = rule.optString("name", keyword);
+                                    String kind = rule.optString("kind", "outgoing");
+                                    String category = rule.optString("category", "");
+                                    return new ParsedTransaction(true, amt, name, kind, "Custom Rule: " + name, msg, category);
+                                }
                             }
                         }
                     }
